@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<body>
+<style>
+
+path {
+  fill: none;
+  stroke: #000;
+  stroke-width: 3px;
+}
+
+circle {
+  fill: steelblue;
+  stroke: #fff;
+  stroke-width: 3px;
+}
+
+</style>
+<script src="d3.v3.min.js"></script>
+<script src="svg-path-properties.min.js"></script>
+<script>
+var width = 2000;
+var height = 2000;
+var canvas = d3.select("body").append("canvas")
+    .attr("width", width)
+    .attr("height", height);
+var context = canvas.node().getContext("2d");
+var interval = 1;
+var patterns = [
+  {
+    path: "M176.6,45.9C71.1,106.2,0,219.8,0,350c0,193.3,156.7,350,350,350s350-156.7,350-350S543.3,0,350,0C286.9,0,227.7,16.7,176.6,45.9"
+  },
+  {
+    path: "M264.7,274.2C114.2,319.2,12.8,403.8,12.8,500.9C12.8,645,236.3,761.8,512,761.8s499.3-116.8,499.3-260.9S787.7,240,512,240C422,240,337.6,252.5,264.7,274.2"
+  },
+  {
+    path: "M350.7,214.2c-43.5,0-87.1,17.2-120.4,51.9c-66.5,69.2-66.5,181.4,0,250.6l40.9,42.6l210.4,219c16.6,17.3,44.2,17.3,60.8,0l210.4-219l40.9-42.6c33.3-34.6,49.9-80,49.9-125.3s-16.6-90.7-49.9-125.3c-66.5-69.2-174.3-69.2-240.8,0L542.4,277c-16.6,17.3-44.2,17.3-60.8,0l-10.5-10.9C437.8,231.5,394.3,214.2,350.7,214.2z"
+  }
+];
+
+var bezierPoint = function(t, p0, p1, p2, p3){
+  var cX = 3 * (p1.x - p0.x),
+      bX = 3 * (p2.x - p1.x) - cX,
+      aX = p3.x - p0.x - cX - bX;
+        
+  var cY = 3 * (p1.y - p0.y),
+      bY = 3 * (p2.y - p1.y) - cY,
+      aY = p3.y - p0.y - cY - bY;
+        
+  var x = (aX * Math.pow(t, 3)) + (bX * Math.pow(t, 2)) + (cX * t) + p0.x;
+  var y = (aY * Math.pow(t, 3)) + (bY * Math.pow(t, 2)) + (cY * t) + p0.y;
+  x = Math.floor(x);
+  y = Math.floor(y);
+  return {x: x, y: y};
+};
+
+var drawBezier = function(p0, p1, p2, p3){
+  var points = [];
+  var accuracy = 0.1;
+  points.push(p0);
+  for (var i = 0; i < 1; i += accuracy){
+      var p = bezierPoint(i, p0, p1, p2, p3);
+      points.push(p);
+  }
+  points.push(p3);
+  return points;
+}
+
+var drawPoints = function(points, color) {
+  context.fillStyle = color;
+  for (var i = 0; i < points.length; i ++)
+  {
+    console.log("color: " + color +", index: "+ i + " points.x:" + points[i].x + " points.y" + points[i].y);
+    context.beginPath();
+    context.arc(points[i].x, points[i].y, 3, 0, 2 * Math.PI);
+    context.fill();
+    context.font = '10px serif';
+    context.fillText('' + i, points[i].x, points[i].y);
+  }
+}
+
+var distance = function (p1, p2) {
+  return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+}
+
+function getRandomInt(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor(Math.random() * (max - min) + min); // The maximum is exclusive and the minimum is inclusive
+}
+
+var getMainFourPointsIndex = function(randomRangeRate = 0.3, num_total_points) { 
+  var changeRange = num_total_points / 4 * randomRangeRate;
+  var LTPointIndex = getRandomInt(0, parseInt(changeRange));
+  var LBPointIndex = LTPointIndex + parseInt(num_total_points / 4) + getRandomInt(-changeRange, changeRange);
+  var RBPointIndex = LBPointIndex + parseInt(num_total_points / 4) + getRandomInt(-changeRange, changeRange);
+  var RTPointIndex = RBPointIndex + parseInt(num_total_points / 4) + getRandomInt(-changeRange, changeRange);
+  return [LTPointIndex, LBPointIndex, RBPointIndex, RTPointIndex];
+}
+
+var createPathString = function (points) {
+  var path = "M";
+  for(var i = 0; i < points.length; i++) {
+    if(i == 0) {
+      path += points[i].x;
+      path += " ";
+      path += points[i].y;
+    }
+    path += " L";
+    path += points[i].x;
+    path += " ";
+    path += points[i].y;
+  }
+  path += " Z";
+  return path;
+}
+
+var convertSpaceBezier = function (points, space = 10) {
+  var spaceBezierPoints = [];
+  for(var i = 0; i < points.length; i++) {
+    var tempPoint = {x: 0, y: 0};
+    tempPoint.x = points[i].x;
+    tempPoint.y = points[i].y + 10;
+    spaceBezierPoints.push(tempPoint);
+  }
+  return spaceBezierPoints;
+}
+
+var resultSeperatedPoints = [];
+
+var seperatePath = function(path, num_segments){
+    var properties = svgPathProperties.svgPathProperties(path);
+    var totalLength = properties.getTotalLength();
+    var num_total_points = 100;
+    var step_distance = totalLength / num_total_points;
+    var points = [];
+    for (var distance = 0; distance < totalLength; distance+=step_distance) {
+        var tempFloatPoint = properties.getPointAtLength(distance);
+        tempFloatPoint.x = Math.floor(tempFloatPoint.x);
+        tempFloatPoint.y = Math.floor(tempFloatPoint.y);
+        points.push(tempFloatPoint);
+    }
+    if( num_segments > 1 ) {
+        var mainFourPoints = getMainFourPointsIndex(randomRangeRate = 0.2, num_total_points);
+        var index_seperatePoint1 = getRandomInt(mainFourPoints[0] + (mainFourPoints[1] - mainFourPoints[0]) / 2 - 20 , mainFourPoints[0] + (mainFourPoints[1] - mainFourPoints[0]) / 2 + 20 );
+        var index_seperatePoint2 = getRandomInt(mainFourPoints[2] + (mainFourPoints[3] - mainFourPoints[2]) / 2 - 20, mainFourPoints[2] + (mainFourPoints[3] - mainFourPoints[2]) / 2 + 20); //+ getRandomInt(-num_total_points/12, num_total_points/12),
+        var seperatePoint1 = points[index_seperatePoint1], seperatePoint2 = points[index_seperatePoint2];
+        var bezierControlPoint1 = {x: getRandomInt(seperatePoint1.x + 100, seperatePoint1.x + (seperatePoint2.x - seperatePoint1.x) / 2),
+            y: getRandomInt(seperatePoint1.y - 150, seperatePoint1.y + 150)};
+        var bezierControlPoint2 = {x: getRandomInt(seperatePoint1.x - 100 + (seperatePoint2.x - seperatePoint1.x) / 2, seperatePoint2.x),
+            y: getRandomInt(seperatePoint2.y - 150, seperatePoint2.y + 150)};
+        var seperateBezierPoints = drawBezier(seperatePoint1, bezierControlPoint1, bezierControlPoint2, seperatePoint2);
+
+        var averageSideRange = parseInt((num_total_points - index_seperatePoint2 + index_seperatePoint1 - 1) / 3);
+        var index_firstPathRTPoint = getRandomInt(index_seperatePoint2 + averageSideRange - averageSideRange * 0.3, index_seperatePoint2 + averageSideRange + averageSideRange * 0.3 );
+        var index_firstPathLTPoint = getRandomInt(index_firstPathRTPoint + averageSideRange - averageSideRange * 0.3, index_firstPathRTPoint + averageSideRange + averageSideRange * 0.3 );
+        var firstPath = [], firstPathLeftPoints = [], firstPathBottomPoints = [], firstPathRightPoints = [], firstPathTopPoints = [];
+        for(var i1 = index_firstPathLTPoint; i1 < num_total_points; i1 ++) {
+            firstPathLeftPoints.push(points[i1]);  //first path's left side points
+        }
+
+        if(index_seperatePoint1 > 0){
+            for(var i2 = 0; i2 < index_seperatePoint1; i2 ++) {
+                firstPathLeftPoints.push(points[i2]);  //first path's left side points
+            }
+        }
+        firstPath.push(firstPathLeftPoints);
+
+        for(var i3 = 0; i3 < seperateBezierPoints.length; i3 ++) {
+            firstPathBottomPoints.push(seperateBezierPoints[i3]);   //set bezier points to first path's bottom side
+        }
+        firstPath.push(firstPathBottomPoints);
+
+        for(var i4 = index_seperatePoint2; i4 < index_firstPathRTPoint; i4 ++) {
+            firstPathRightPoints.push(points[i4]);
+        }
+        firstPath.push(firstPathRightPoints);
+
+        for(var i5 = index_firstPathRTPoint; i5 < index_firstPathLTPoint; i5 ++) {
+            if(i5 < points.length) {
+                firstPathTopPoints.push(points[i5]);
+            }
+        }
+        firstPath.push(firstPathTopPoints);
+        resultSeperatedPoints.push(firstPath);
+
+        var secondPath = "";
+        var secondPathPoints = [];
+        for( var i6 = index_seperatePoint1 + 2; i6 < index_seperatePoint2 - 2; i6++) {
+            secondPathPoints.push(points[i6]);
+        }
+        var spaceBezierPoints = convertSpaceBezier(seperateBezierPoints);
+        for( var i7 = spaceBezierPoints.length - 1; i7 > 0; i7--) {
+            secondPathPoints.push(spaceBezierPoints[i7]);
+        }
+        secondPath = createPathString(secondPathPoints);
+        num_segments -= 1;
+        seperatePath(secondPath, num_segments);
+    }
+
+    else if( num_segments == 1) {
+        var finalPath = [];
+        var finalLeftPoints = [], finalBottomPoints = [], finalRightPoints = [], finalTopPoints = [];
+        var start_index = getRandomInt(num_total_points - 20, num_total_points - 1);
+        var random_side_point_index = [];
+        random_side_point_index.push(getRandomInt(num_total_points / 4 - num_total_points / 10, num_total_points /4 + num_total_points / 10));
+        random_side_point_index.push(random_side_point_index[0] + getRandomInt(num_total_points / 4 - num_total_points / 10, num_total_points /4 + num_total_points / 10));
+        random_side_point_index.push(random_side_point_index[1] + getRandomInt(num_total_points / 4 - num_total_points / 10, num_total_points /4 + num_total_points / 10));
+        var index_before_points = 0;
+        for( var i1 = start_index; i1 < num_total_points; i1 ++) {
+            finalLeftPoints.push(points[i1]);
+            index_before_points++;
+        }
+        var real_start_index = random_side_point_index[0] - index_before_points
+        for(var i2 = 0; i2 < real_start_index; i2++) {
+            finalLeftPoints.push(points[i2]);
+        }
+        for(var i3 = real_start_index; i3 < random_side_point_index[1]; i3++) {
+            finalBottomPoints.push(points[i3]);
+        }
+        for(var i4 = random_side_point_index[1]; i4 < random_side_point_index[2]; i4++) {
+            finalRightPoints.push(points[i4]);
+        }
+        for(var i5 = random_side_point_index[2]; i5 < start_index; i5++) {
+            finalTopPoints.push(points[i5]);
+        }
+        finalPath.push(finalLeftPoints);
+        finalPath.push(finalBottomPoints);
+        finalPath.push(finalRightPoints);
+        finalPath.push(finalTopPoints);
+        resultSeperatedPoints.push(finalPath);
+        return resultSeperatedPoints;
+    }
+}
+
+var main = function (shape_index, segmants) {
+  seperatePath(patterns[shape_index].path, segmants);
+  var colors = [
+    ["#000000", "#330000", "#880000", "#aa0000"],
+    ["#ff00ff", "#003300", "#008800", "#00aa00"],
+    ["#00ffff", "#000033", "#000088", "#0000aa"],
+  ];
+  for( var i = 0; i < resultSeperatedPoints.length; i++) {
+    for( var j = 0; j < 4; j++) {
+      drawPoints(resultSeperatedPoints[i][j], colors[i][j]);
+    }
+  }
+}
+main(2, 2)
+</script>

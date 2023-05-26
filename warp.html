@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<body>
+<style>
+
+path {
+  fill: none;
+  stroke: #000;
+  stroke-width: 3px;
+}
+
+circle {
+  fill: steelblue;
+  stroke: #fff;
+  stroke-width: 3px;
+}
+
+</style>
+<script src="d3.v3.min.js"></script>
+<script src="svg-path-properties.min.js"></script>
+<script>
+var width = 2000;
+var height = 2000;
+var canvas = d3.select("body").append("canvas")
+    .attr("width", width)
+    .attr("height", height);
+var context = canvas.node().getContext("2d");
+var interval = 1;
+var patterns = [
+  {
+    path: "M176.6,45.9C71.1,106.2,0,219.8,0,350c0,193.3,156.7,350,350,350s350-156.7,350-350S543.3,0,350,0C286.9,0,227.7,16.7,176.6,45.9",
+    zt:91,
+    zl:16,
+    zb:41,
+    zr:66,
+    center: {x:350, y: 350},
+    variationRange_x: 150,
+    variationRange_y: 150,
+    variationIndexRange_x: 6,
+    variationIndexRange_y: 6
+  },
+  {
+    path: "M264.7,274.2C114.2,319.2,12.8,403.8,12.8,500.9C12.8,645,236.3,761.8,512,761.8s499.3-116.8,499.3-260.9S787.7,240,512,240C422,240,337.6,252.5,264.7,274.2",
+    zt: 88,
+    zl:15,
+    zb:39,
+    zr:65,
+    center: {x: 512, y: 500},
+    variationRange_x: 240,
+    variationRange_y: 110,
+    variationIndexRange_x: 10,
+    variationIndexRange_y: 5, 
+  },
+  {
+    path: "M350.7,214.2c-43.5,0-87.1,17.2-120.4,51.9c-66.5,69.2-66.5,181.4,0,250.6l40.9,42.6l210.4,219c16.6,17.3,44.2,17.3,60.8,0l210.4-219l40.9-42.6c33.3-34.6,49.9-80,49.9-125.3s-16.6-90.7-49.9-125.3c-66.5-69.2-174.3-69.2-240.8,0L542.4,277c-16.6,17.3-44.2,17.3-60.8,0l-10.5-10.9C437.8,231.5,394.3,214.2,350.7,214.2z",
+    zt:0,
+    zl:20,
+    zb:41,
+    zr:62,
+    center: {x: 512, y: 500},
+    variationRange_x: 135,
+    variationRange_y: 100,
+    variationIndexRange_y: 6
+  }
+];
+
+var bezier4Point = function(t, p0, p1, p2, p3){
+  var cX = 3 * (p1.x - p0.x),
+      bX = 3 * (p2.x - p1.x) - cX,
+      aX = p3.x - p0.x - cX - bX;
+        
+  var cY = 3 * (p1.y - p0.y),
+      bY = 3 * (p2.y - p1.y) - cY,
+      aY = p3.y - p0.y - cY - bY;
+        
+  var x = (aX * Math.pow(t, 3)) + (bX * Math.pow(t, 2)) + (cX * t) + p0.x;
+  var y = (aY * Math.pow(t, 3)) + (bY * Math.pow(t, 2)) + (cY * t) + p0.y;
+  x = Math.floor(x);
+  y = Math.floor(y);
+  return {x: x, y: y};
+};
+
+var bezier3Point = function(t, p0, p1, p2) {
+  var x = Math.pow(1 - t, 2) * p0.x + 2 * (1 - t) * t * p1.x + Math.pow(t, 2) * p2.x;
+  var y = Math.pow(1 - t, 2) * p0.y + 2 * (1 - t) * t * p1.y + Math.pow(t, 2) * p2.y;
+  x = Math.floor(x);
+  y = Math.floor(y);
+  return {x: x, y: y};
+};
+
+var createPathString = function (points) {
+  var path = "M";
+  for(var i = 0; i < points.length; i++) {
+    if(i == 0) {
+      path += points[i].x;
+      path += ",";
+      path += points[i].y;
+    }
+    else {
+      path += " L";
+      path += points[i].x;
+      path += ",";
+      path += points[i].y;
+    }
+  }
+  // path += "Z";
+  return path;
+};
+
+var pathRegulazation = function (points) {
+  var tempPathString = createPathString(points);
+  var tempProperties = svgPathProperties.svgPathProperties(tempPathString);
+  var interval_distance = tempProperties.getTotalLength() / (points.length - 1);
+  var regularPoints = [];
+  for ( var distance = 0; distance < tempProperties.getTotalLength() + 1; distance += interval_distance) {
+    var tempPoint = tempProperties.getPointAtLength(distance);
+    regularPoints.push(tempPoint);
+  }
+
+  if (regularPoints.length == points.length) {
+    drawPoints(regularPoints, "#777777");
+    return regularPoints;
+  }
+};
+
+var draw4PointBezier = function(p0, p1, p2, p3){
+  var points = [];
+  var accuracy = 0.05;
+  points.push(p0);
+  for (var i = 0; i < 1; i += accuracy){
+      var p = bezier4Point(i, p0, p1, p2, p3);
+      points.push(p);
+  }
+  points.push(p3);
+  return points;
+}
+
+var draw3PointBezier = function(p0, p1, p2) {
+  var points = [];
+  var accuracy = 0.05;
+  points.push(p0);
+  for (var i = 0; i < 1; i += accuracy){
+      var p = bezier3Point(i, p0, p1, p2);
+      points.push(p);
+  }
+  points.push(p2);
+  return points;
+}
+
+var drawPoints = function(points, color) {
+  context.fillStyle = color;
+  for (var i = 0; i < points.length; i ++)
+  {
+    // console.log("color: " + color +", index: "+ i + " points.x:" + points[i].x + " points.y" + points[i].y);
+    context.beginPath();
+    context.arc(points[i].x, points[i].y, 3, 0, 2 * Math.PI);
+    context.fill();
+    context.font = '10px serif';
+    context.fillText('' + i, points[i].x, points[i].y);
+  }
+}
+
+var distance = function (p1, p2) {
+  return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+}
+
+function getRandomInt(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor(Math.random() * (max - min) + min); // The maximum is exclusive and the minimum is inclusive
+}
+
+var convertSpaceBezier = function (points, space = 10) {
+  var spaceBezierPoints = [];
+  for(var i = 0; i < points.length; i++) {
+    var tempPoint = {x: 0, y: 0};
+    tempPoint.x = points[i].x;
+    tempPoint.y = points[i].y + 10;
+    spaceBezierPoints.push(tempPoint);
+  }
+  return spaceBezierPoints;
+}
+
+var resultSeperatedPoints = [];
+
+var getRandomCorePoint = function(pathIndex) {
+  var corePoint = {x: 0, y: 0};
+  var x = getRandomInt(patterns[pathIndex].center.x - patterns[pathIndex].variationRange_x, patterns[pathIndex].center.x + patterns[pathIndex].variationRange_x);
+  var y = getRandomInt(patterns[pathIndex].center.y - patterns[pathIndex].variationRange_y, patterns[pathIndex].center.y + patterns[pathIndex].variationRange_y);
+  corePoint.x = x;
+  corePoint.y = y;
+  return corePoint;
+}
+
+var getBezierControlPoints = function(point1, point2) {
+  var tempPoint1 = {x: 0, y: 0}, tempPoint2 = {x: 0, y: 0};
+  tempPoint1.x = getRandomInt(point1.x + 20, (point2.x - point1.x) / 2 - 20);
+  tempPoint1.y = getRandomInt(point1.y - 50, point1.y + 50);
+  tempPoint2.x = getRandomInt((point2.x - point1.x) / 2 + 20, point2.x - 20);
+  tempPoint2.y = getRandomInt(point2.y - 50, point2.y + 50);
+  return [tempPoint1, tempPoint2];
+}
+
+var getBezier3ControlPoint = function(point1, point2) {
+  var x = getRandomInt(point1.x + (point2.x - point1.x) / 2 - 50, point1.x + (point2.x - point1.x) / 2 + 50);
+  var y = getRandomInt(point1.y - 50, point1.y + 50);
+  return {x: x, y: y};
+}
+
+var seperatePath = function(pathIndex, num_segments){
+    var properties = svgPathProperties.svgPathProperties(patterns[pathIndex].path);
+    var totalLength = properties.getTotalLength();
+    var num_total_points = 100;
+    var step_distance = totalLength / num_total_points;
+    var points = [];
+    var distance = 0;
+    for (var i = 0; i < num_total_points; i++, distance+=step_distance) {
+        var tempPoint = properties.getPointAtLength(distance);
+        tempPoint.x = Math.floor(tempPoint.x);
+        tempPoint.y = Math.floor(tempPoint.y);
+        points.push(tempPoint);
+    }
+    var startPointIndex = -1;
+    if(pathIndex == 2) {
+      startPointIndex = getRandomInt(6, 12);
+    }
+    else {
+      startPointIndex = getRandomInt(0, 3);
+    }
+    if ( num_segments == 2) {
+      var seperatePointIndex1 = getRandomInt(patterns[pathIndex].zl - patterns[pathIndex].variationIndexRange_y, patterns[pathIndex].zl + patterns[pathIndex].variationIndexRange_y); 
+      var seperatePointIndex2 =  -1;
+      if (seperatePointIndex1 <= patterns[pathIndex].zl) {
+        seperatePointIndex2 = getRandomInt(patterns[pathIndex].zr - patterns[pathIndex].variationIndexRange_y, patterns[pathIndex].zr);
+      }
+      else {
+        seperatePointIndex2 = getRandomInt(patterns[pathIndex].zr, patterns[pathIndex].zr + patterns[pathIndex].variationIndexRange_y);
+      }
+      var firstBezierControlPoint = getRandomCorePoint(pathIndex);
+      var secondBezierControlPoint = getRandomCorePoint(pathIndex);
+      drawPoints([firstBezierControlPoint, secondBezierControlPoint], "#ff3333");
+      var seperateBezierPoints = draw4PointBezier(points[seperatePointIndex1], firstBezierControlPoint, secondBezierControlPoint, points[seperatePointIndex2]);
+      var spacedSeperateBezierPoints = convertSpaceBezier(seperateBezierPoints, space = 50);
+      var firstPathPoints = [];
+      var i1 = 0, i2 = 0, i3 = 0, i4 = 0, i5 = 0, i6 = 0, i7 = 0, i8 = 0;
+      var leftPathPoints = [], bottomPathPoints = [], rightPathPoints = [], topPathPoints = [];
+      for( var i1 = startPointIndex; i1 < seperatePointIndex1; i1++) {
+        leftPathPoints.push(points[i1]);
+      }
+      for( var i2 = 0; i2 < seperateBezierPoints.length; i2 ++) {
+        bottomPathPoints.push(seperateBezierPoints[i2]);
+      }
+      var restPointsNumber = 99 - seperatePointIndex2 + startPointIndex;
+      var rightTopPointIndex = getRandomInt(seperatePointIndex2 + restPointsNumber / 4, seperatePointIndex2 + restPointsNumber / 2);
+      for( var i3 = seperatePointIndex2 + 1; i3 < rightTopPointIndex; i3 ++) {
+        rightPathPoints.push(points[i3]);
+      }
+      for( var i4 = rightTopPointIndex; i4 < 100; i4 ++ ) {
+        topPathPoints.push(points[i4]);
+      }
+      for( var i5 = 0; i5 < startPointIndex; i5 ++) {
+        topPathPoints.push(points[i5]);
+      }
+      leftPathPoints = pathRegulazation(leftPathPoints);
+      bottomPathPoints = pathRegulazation(bottomPathPoints);
+      rightPathPoints = pathRegulazation(rightPathPoints);
+      topPathPoints = pathRegulazation(topPathPoints);
+
+      firstPathPoints = [leftPathPoints, bottomPathPoints, rightPathPoints, topPathPoints];
+      resultSeperatedPoints.push(firstPathPoints);
+      var secondPathPoints = [];
+      var i1 = 0, i2 = 0, i3 = 0, i4 = 0, i5 = 0;
+      var leftPathPoints = [], rightPathPoints = [], bottomPathPoints = [], topPathPoints = [];
+      restPointsNumber = seperatePointIndex2 - seperatePointIndex1;
+      var leftBottomPointIndex = getRandomInt(seperatePointIndex1 + restPointsNumber / 6, seperatePointIndex1 + restPointsNumber / 4);
+      for( var i1 = seperatePointIndex1 + 1; i1 < leftBottomPointIndex; i1 ++) {
+        leftPathPoints.push(points[i1]);
+      }
+      var rightBottomPointIndex = getRandomInt(seperatePointIndex2 - restPointsNumber / 6, seperatePointIndex2 - restPointsNumber / 4);
+      for( var i2 = leftBottomPointIndex; i2 < rightBottomPointIndex; i2 ++) {
+        bottomPathPoints.push(points[i2]);
+      }
+      for( var i3 = rightBottomPointIndex; i3 < seperatePointIndex2 ; i3 ++) {
+        rightPathPoints.push(points[i3]);
+      }
+      for( var i4 = spacedSeperateBezierPoints.length - 1; i4 >= 0; i4 -- ) {
+        topPathPoints.push(spacedSeperateBezierPoints[i4]);
+      }
+      leftPathPoints = pathRegulazation(leftPathPoints);
+      bottomPathPoints = pathRegulazation(bottomPathPoints);
+      rightPathPoints = pathRegulazation(rightPathPoints);
+      topPathPoints = pathRegulazation(topPathPoints);
+
+      secondPathPoints = [leftPathPoints, bottomPathPoints, rightPathPoints, topPathPoints];
+      resultSeperatedPoints.push(secondPathPoints);
+    }
+  }
+
+var colors = [
+    ["#000000", "#394eff", "#ed46ff", "#ff3663"],
+    ["#52fffd", "#56ff79", "#f7ff4b", "#ff9a2e"],
+    ["#00ffff", "#000033", "#000088", "#0000aa"],
+  ];
+seperatePath(2, 2);
+for( var i = 0; i < resultSeperatedPoints.length; i ++) {
+  for( var j = 0; j < 4; j ++ ) {
+    drawPoints(resultSeperatedPoints[i][j], colors[i][j]);
+  }
+}
+</script>
